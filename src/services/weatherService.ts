@@ -2,123 +2,113 @@ import * as Location from 'expo-location';
 import { WeatherData } from '@/types';
 
 const OPENWEATHER_API_KEY = process.env.EXPO_PUBLIC_OPENWEATHER_API_KEY;
-const OPENWEATHER_BASE = 'https://api.openweathermap.org/data/2.5';
+const BASE = 'https://api.openweathermap.org/data/2.5';
 
-// 날씨 상태 코드 → 한국어 변환
-function getKoreanCondition(weatherId: number, main: string): string {
-  if (weatherId >= 200 && weatherId < 300) return '뇌우';
-  if (weatherId >= 300 && weatherId < 400) return '이슬비';
-  if (weatherId >= 500 && weatherId < 600) {
-    if (weatherId === 500) return '약한 비';
-    if (weatherId === 501) return '보통 비';
-    return '강한 비';
-  }
-  if (weatherId >= 600 && weatherId < 700) return '눈';
-  if (weatherId >= 700 && weatherId < 800) return '안개';
-  if (weatherId === 800) return '맑음';
-  if (weatherId === 801) return '구름 조금';
-  if (weatherId === 802) return '구름 많음';
-  if (weatherId >= 803) return '흐림';
-  return main;
+// 날씨 상태 코드 → 한국어
+function getKoreanCondition(id: number): string {
+  if (id >= 200 && id < 300) return '뇌우';
+  if (id >= 300 && id < 400) return '이슬비';
+  if (id === 500) return '약한 비';
+  if (id === 501) return '보통 비';
+  if (id >= 502 && id < 600) return '강한 비';
+  if (id >= 600 && id < 700) return '눈';
+  if (id >= 700 && id < 800) return '안개';
+  if (id === 800) return '맑음';
+  if (id === 801) return '구름 조금';
+  if (id === 802) return '구름 많음';
+  if (id >= 803) return '흐림';
+  return '기타';
 }
 
 export async function getCurrentLocation(): Promise<{ lat: number; lng: number; city?: string }> {
   const { status } = await Location.requestForegroundPermissionsAsync();
-  if (status !== 'granted') {
-    throw new Error('위치 권한이 거부되었습니다.');
-  }
+  if (status !== 'granted') throw new Error('위치 권한이 거부되었습니다.');
 
-  const location = await Location.getCurrentPositionAsync({
-    accuracy: Location.Accuracy.Balanced,
+  const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+  const geo = await Location.reverseGeocodeAsync({
+    latitude: loc.coords.latitude,
+    longitude: loc.coords.longitude,
   });
-
-  // 역지오코딩으로 도시명 가져오기
-  const geocode = await Location.reverseGeocodeAsync({
-    latitude: location.coords.latitude,
-    longitude: location.coords.longitude,
-  });
-
-  const city = geocode[0]?.city || geocode[0]?.region || undefined;
-
-  return {
-    lat: location.coords.latitude,
-    lng: location.coords.longitude,
-    city,
-  };
+  const city = geo[0]?.city || geo[0]?.region || undefined;
+  return { lat: loc.coords.latitude, lng: loc.coords.longitude, city };
 }
 
 export async function getWeatherByCoords(lat: number, lng: number): Promise<WeatherData> {
-  if (!OPENWEATHER_API_KEY) {
-    // 개발 환경에서는 Mock 날씨 반환
-    return getMockWeather();
+  if (!OPENWEATHER_API_KEY) return getMockWeather();
+
+  // 현재 날씨 + 3시간 예보(강수확률) 병렬 요청
+  const [currentRes, forecastRes] = await Promise.all([
+    fetch(`${BASE}/weather?lat=${lat}&lon=${lng}&appid=${OPENWEATHER_API_KEY}&units=metric&lang=kr`),
+    fetch(`${BASE}/forecast?lat=${lat}&lon=${lng}&appid=${OPENWEATHER_API_KEY}&units=metric&cnt=2`),
+  ]);
+
+  if (!currentRes.ok) throw new Error('날씨 정보를 불러오지 못했습니다.');
+
+  const current = await currentRes.json();
+  let precipProb = 0;
+
+  if (forecastRes.ok) {
+    const forecast = await forecastRes.json();
+    // forecast.list[0].pop = probability of precipitation (0~1)
+    precipProb = Math.round((forecast.list?.[0]?.pop ?? 0) * 100);
   }
-
-  const url = `${OPENWEATHER_BASE}/weather?lat=${lat}&lon=${lng}&appid=${OPENWEATHER_API_KEY}&units=metric&lang=kr`;
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error('날씨 정보를 불러오지 못했습니다.');
-  }
-
-  const data = await response.json();
-
-  // 강수확률은 forecast API에서 가져와야 하지만 MVP에서는 현재 날씨만 사용
-  const precipProb = data.rain ? Math.min(100, (data.rain['1h'] || 0) * 20) : 0;
 
   return {
-    city: data.name,
-    temperature: Math.round(data.main.temp),
-    feels_like: Math.round(data.main.feels_like),
-    condition: getKoreanCondition(data.weather[0].id, data.weather[0].main),
-    condition_code: String(data.weather[0].id),
-    humidity: data.main.humidity,
+    city: current.name,
+    temperature: Math.round(current.main.temp),
+    feels_like: Math.round(current.main.feels_like),
+    condition: getKoreanCondition(current.weather[0].id),
+    condition_code: String(current.weather[0].id),
+    humidity: current.main.humidity,
     precipitation_prob: precipProb,
-    wind_speed: data.wind.speed,
-    icon: data.weather[0].icon,
+    wind_speed: Math.round(current.wind.speed * 10) / 10,
+    icon: current.weather[0].icon,
     updated_at: new Date().toISOString(),
   };
 }
 
 export async function getWeatherByCity(city: string): Promise<WeatherData> {
-  if (!OPENWEATHER_API_KEY) {
-    return getMockWeather(city);
+  if (!OPENWEATHER_API_KEY) return getMockWeather(city);
+
+  const [currentRes, forecastRes] = await Promise.all([
+    fetch(`${BASE}/weather?q=${encodeURIComponent(city)}&appid=${OPENWEATHER_API_KEY}&units=metric&lang=kr`),
+    fetch(`${BASE}/forecast?q=${encodeURIComponent(city)}&appid=${OPENWEATHER_API_KEY}&units=metric&cnt=2`),
+  ]);
+
+  if (!currentRes.ok) throw new Error('도시를 찾을 수 없습니다.');
+
+  const current = await currentRes.json();
+  let precipProb = 0;
+  if (forecastRes.ok) {
+    const forecast = await forecastRes.json();
+    precipProb = Math.round((forecast.list?.[0]?.pop ?? 0) * 100);
   }
-
-  const url = `${OPENWEATHER_BASE}/weather?q=${encodeURIComponent(city)}&appid=${OPENWEATHER_API_KEY}&units=metric&lang=kr`;
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error('도시를 찾을 수 없습니다.');
-  }
-
-  const data = await response.json();
 
   return {
-    city: data.name,
-    temperature: Math.round(data.main.temp),
-    feels_like: Math.round(data.main.feels_like),
-    condition: getKoreanCondition(data.weather[0].id, data.weather[0].main),
-    condition_code: String(data.weather[0].id),
-    humidity: data.main.humidity,
-    precipitation_prob: 0,
-    wind_speed: data.wind.speed,
-    icon: data.weather[0].icon,
+    city: current.name,
+    temperature: Math.round(current.main.temp),
+    feels_like: Math.round(current.main.feels_like),
+    condition: getKoreanCondition(current.weather[0].id),
+    condition_code: String(current.weather[0].id),
+    humidity: current.main.humidity,
+    precipitation_prob: precipProb,
+    wind_speed: Math.round(current.wind.speed * 10) / 10,
+    icon: current.weather[0].icon,
     updated_at: new Date().toISOString(),
   };
 }
 
-// Mock 날씨 데이터 (API 키 없을 때 사용)
 function getMockWeather(city = '서울'): WeatherData {
   return {
     city,
-    temperature: 18,
-    feels_like: 16,
-    condition: '구름 조금',
-    condition_code: '801',
-    humidity: 60,
-    precipitation_prob: 20,
+    temperature: 22,
+    feels_like: 21,
+    condition: '맑음',
+    condition_code: '800',
+    humidity: 55,
+    precipitation_prob: 10,
     wind_speed: 2.5,
-    icon: '02d',
+    icon: '01d',
     updated_at: new Date().toISOString(),
   };
 }
