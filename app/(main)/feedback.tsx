@@ -4,7 +4,6 @@ import {
   TouchableOpacity, Alert, ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/stores/authStore';
 import { useWeatherStore } from '@/stores/weatherStore';
@@ -97,27 +96,41 @@ export default function FeedbackScreen() {
 
   const [phase, setPhase] = useState<Phase>('pick');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
+  const [photoMime, setPhotoMime] = useState<string>('image/jpeg');
   const [feedback, setFeedback] = useState<OutfitFeedback | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // ── 사진 선택 (자르기 없이) ──────────────────────────
+  // ── 사진 선택 (자르기 없이, base64 포함) ──────────────
   const pickPhoto = async (fromCamera: boolean) => {
+    const opts: ImagePicker.ImagePickerOptions = {
+      allowsEditing: false,   // 네이티브 "자르기" UI 완전 제거
+      quality: 0.85,
+      base64: true,           // base64 데이터를 직접 받음 (expo-file-system 불필요)
+    };
+
     if (fromCamera) {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) { Alert.alert('권한 필요', '카메라 접근 권한이 필요합니다.'); return; }
-      const res = await ImagePicker.launchCameraAsync({
-        allowsEditing: false,   // 네이티브 "자르기" UI 제거
-        quality: 0.85,
-      });
-      if (!res.canceled) { setPhotoUri(res.assets[0].uri); setPhase('preview'); }
+      const res = await ImagePicker.launchCameraAsync(opts);
+      if (!res.canceled && res.assets[0]) {
+        const asset = res.assets[0];
+        setPhotoUri(asset.uri);
+        setPhotoBase64(asset.base64 ?? null);
+        setPhotoMime(asset.mimeType ?? 'image/jpeg');
+        setPhase('preview');
+      }
     } else {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) { Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.'); return; }
-      const res = await ImagePicker.launchImageLibraryAsync({
-        allowsEditing: false,   // 네이티브 "자르기" UI 제거
-        quality: 0.85,
-      });
-      if (!res.canceled) { setPhotoUri(res.assets[0].uri); setPhase('preview'); }
+      const res = await ImagePicker.launchImageLibraryAsync(opts);
+      if (!res.canceled && res.assets[0]) {
+        const asset = res.assets[0];
+        setPhotoUri(asset.uri);
+        setPhotoBase64(asset.base64 ?? null);
+        setPhotoMime(asset.mimeType ?? 'image/jpeg');
+        setPhase('preview');
+      }
     }
   };
 
@@ -135,15 +148,10 @@ export default function FeedbackScreen() {
     setPhase('analyzing');
     setApiError(null);
     try {
-      // 로컬 file:// URI → base64 변환
-      const base64 = await FileSystem.readAsStringAsync(photoUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
       const result: OutfitFeedback = await api.post('/api/v1/feedback/analyze', {
         photo_url: photoUri,
-        photo_base64: base64,
-        photo_mime_type: 'image/jpeg',
+        photo_base64: photoBase64,   // ImagePicker base64: true 로 받은 데이터
+        photo_mime_type: photoMime,
         user_id: user.id,
         weather_context: weather,
         user_context: {
@@ -163,7 +171,10 @@ export default function FeedbackScreen() {
     }
   };
 
-  const reset = () => { setPhotoUri(null); setFeedback(null); setPhase('pick'); setApiError(null); };
+  const reset = () => {
+    setPhotoUri(null); setPhotoBase64(null); setPhotoMime('image/jpeg');
+    setFeedback(null); setPhase('pick'); setApiError(null);
+  };
 
   // ── 렌더 ─────────────────────────────────────────
   return (
