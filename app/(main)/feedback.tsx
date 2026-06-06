@@ -4,6 +4,7 @@ import {
   TouchableOpacity, Alert, ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/stores/authStore';
 import { useWeatherStore } from '@/stores/weatherStore';
@@ -87,7 +88,7 @@ const di = StyleSheet.create({
 });
 
 // ── 단계 타입 ─────────────────────────────────────────
-type Phase = 'pick' | 'ready' | 'analyzing' | 'result';
+type Phase = 'pick' | 'preview' | 'analyzing' | 'result';
 
 export default function FeedbackScreen() {
   const { user } = useAuthStore();
@@ -97,19 +98,26 @@ export default function FeedbackScreen() {
   const [phase, setPhase] = useState<Phase>('pick');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<OutfitFeedback | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
 
-  // ── 사진 선택 ─────────────────────────────────────
+  // ── 사진 선택 (자르기 없이) ──────────────────────────
   const pickPhoto = async (fromCamera: boolean) => {
     if (fromCamera) {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) { Alert.alert('권한 필요', '카메라 접근 권한이 필요합니다.'); return; }
-      const res = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [3, 4], quality: 0.85 });
-      if (!res.canceled) { setPhotoUri(res.assets[0].uri); setPhase('ready'); }
+      const res = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,   // 네이티브 "자르기" UI 제거
+        quality: 0.85,
+      });
+      if (!res.canceled) { setPhotoUri(res.assets[0].uri); setPhase('preview'); }
     } else {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) { Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.'); return; }
-      const res = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [3, 4], quality: 0.85 });
-      if (!res.canceled) { setPhotoUri(res.assets[0].uri); setPhase('ready'); }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: false,   // 네이티브 "자르기" UI 제거
+        quality: 0.85,
+      });
+      if (!res.canceled) { setPhotoUri(res.assets[0].uri); setPhase('preview'); }
     }
   };
 
@@ -125,9 +133,17 @@ export default function FeedbackScreen() {
   const analyze = async () => {
     if (!photoUri || !user) return;
     setPhase('analyzing');
+    setApiError(null);
     try {
+      // 로컬 file:// URI → base64 변환
+      const base64 = await FileSystem.readAsStringAsync(photoUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
       const result: OutfitFeedback = await api.post('/api/v1/feedback/analyze', {
         photo_url: photoUri,
+        photo_base64: base64,
+        photo_mime_type: 'image/jpeg',
         user_id: user.id,
         weather_context: weather,
         user_context: {
@@ -136,34 +152,33 @@ export default function FeedbackScreen() {
           today_activity: user.today_activity,
           additional_request: user.additional_request,
         },
-        wardrobe_items: items.slice(0, 10),   // 옷장 상위 10개 참고
+        wardrobe_items: items.slice(0, 10),
       });
       setFeedback(result);
       setPhase('result');
-    } catch (err) {
-      console.warn('API 오류, Mock 사용:', err);
-      setFeedback(getMockFeedback(user.id));
-      setPhase('result');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : '알 수 없는 오류';
+      setApiError(message);
+      setPhase('preview');   // 미리보기로 돌아가 오류 표시
     }
   };
 
-  const reset = () => { setPhotoUri(null); setFeedback(null); setPhase('pick'); };
+  const reset = () => { setPhotoUri(null); setFeedback(null); setPhase('pick'); setApiError(null); };
 
   // ── 렌더 ─────────────────────────────────────────
   return (
     <SafeAreaView style={s.container}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={s.title}>📸 오늘 옷 평가받기</Text>
 
         {/* PHASE: pick */}
         {phase === 'pick' && (
           <>
+            <Text style={s.title}>📸 오늘 옷 평가받기</Text>
             <TouchableOpacity style={[s.photoArea, shadow.sm]} onPress={showPickerAlert}>
               <Text style={s.cameraEmoji}>📷</Text>
               <Text style={s.cameraLabel}>탭하여 착장 사진 추가</Text>
               <Text style={s.cameraSub}>카메라 촬영 또는 갤러리 업로드</Text>
             </TouchableOpacity>
-            {/* 컨텍스트 요약 */}
             {(weather || user?.today_activity) && (
               <View style={s.contextBox}>
                 <Text style={s.contextTitle}>분석에 반영될 정보</Text>
@@ -181,10 +196,30 @@ export default function FeedbackScreen() {
           </>
         )}
 
-        {/* PHASE: ready (사진 선택 후, 분석 전) */}
-        {phase === 'ready' && photoUri && (
+        {/* PHASE: preview — 사진 확인 화면 ("확인" 버튼 포함) */}
+        {phase === 'preview' && photoUri && (
           <>
+            {/* 상단 헤더: 다시 선택 ← | → 확인 */}
+            <View style={s.previewHeader}>
+              <TouchableOpacity onPress={showPickerAlert} style={s.previewHeaderBtn}>
+                <Text style={s.previewHeaderBack}>← 다시 선택</Text>
+              </TouchableOpacity>
+              <Text style={s.previewTitle}>사진 확인</Text>
+              <TouchableOpacity onPress={analyze} style={s.previewHeaderBtn}>
+                <Text style={s.previewConfirm}>확인</Text>
+              </TouchableOpacity>
+            </View>
+
             <Image source={{ uri: photoUri }} style={[s.photo, shadow.md]} resizeMode="cover" />
+
+            {/* 오류 메시지 */}
+            {apiError && (
+              <View style={s.errorBox}>
+                <Text style={s.errorText}>⚠️ {apiError}</Text>
+              </View>
+            )}
+
+            {/* 하단 버튼 */}
             <View style={s.readyBtns}>
               <Button title="다시 선택" onPress={showPickerAlert} variant="secondary" style={s.btnHalf} />
               <Button title="AI 분석 시작 ✨" onPress={analyze} style={s.btnHalf} />
@@ -208,6 +243,7 @@ export default function FeedbackScreen() {
         {phase === 'result' && feedback && (
           <ResultView feedback={feedback} photoUri={photoUri} onRetry={reset} />
         )}
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -307,7 +343,6 @@ function ResultView({
       <View style={[r.card, shadow.sm]}>
         <Text style={r.cardTitle}>🎨 AI 생성 이미지</Text>
         {feedback.image_error && !hasImages ? (
-          /* 이미지 생성 실패 */
           <View style={r.imageError}>
             <Text style={r.imageErrorEmoji}>🖼️</Text>
             <Text style={r.imageErrorText}>{feedback.image_error}</Text>
@@ -335,38 +370,6 @@ function ResultView({
   );
 }
 
-// ── Mock 데이터 ───────────────────────────────────────
-function getMockFeedback(userId: string): OutfitFeedback {
-  return {
-    id: 'mock-' + Date.now(),
-    user_id: userId,
-    photo_url: '',
-    overall: 'needs_improvement',
-    overall_comment: '전체적으로 무난한 코디예요! 색상 조합에서 약간 아쉬운 부분이 있지만 기본기는 탄탄해요. 몇 가지 포인트만 수정하면 훨씬 세련된 스타일이 완성될 것 같아요 😊',
-    scores: { color_harmony: 72, season_fit: 85, tpo_fit: 68 },
-    item_comments: {
-      color_harmony: '상의와 하의 색상 대비가 조금 강해요. 톤온톤 배색이나 뉴트럴 컬러를 활용하면 더 조화로워질 거예요.',
-      season_fit: '현재 날씨와 계절에 소재는 잘 맞아요! 레이어링을 추가하면 온도 변화에도 대응할 수 있어요.',
-      tpo_fit: '일상 활동에는 무난하지만, 상황에 특화된 스타일링을 더하면 자신감이 올라갈 거예요.',
-    },
-    good_points: [
-      '실루엣 자체는 깔끔하고 정돈된 느낌이에요 👍',
-      '신발 선택이 전체 코디와 잘 어우러져요.',
-    ],
-    suggestions: [
-      '상의 색이 다소 강해요. 베이지나 화이트 계열로 바꾸면 더 조화로울 것 같아요.',
-      '오늘 강수 확률이 있으니 방수 소재 아우터를 챙겨보세요.',
-    ],
-    styling_tips: [
-      '심플한 실버 목걸이 하나만 추가해도 완성도가 확 올라가요!',
-      '가방을 토트백으로 바꾸면 더 세련된 느낌을 줄 수 있어요.',
-      '깔끔한 로퍼로 마무리하면 완벽한 데일리 룩이 됩니다.',
-    ],
-    image_error: '이미지 생성 중 오류가 발생했습니다. 텍스트 분석 결과를 확인해주세요.',
-    created_at: new Date().toISOString(),
-  };
-}
-
 // ── 스타일 ────────────────────────────────────────────
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
@@ -387,10 +390,28 @@ const s = StyleSheet.create({
   },
   contextTitle: { ...typography.bodySmall, fontWeight: '700', color: colors.accent, marginBottom: spacing.xs },
   contextItem: { ...typography.bodySmall, color: colors.text.secondary },
+
+  // 사진 확인(preview) 헤더
+  previewHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  previewHeaderBtn: { minWidth: 80 },
+  previewHeaderBack: { ...typography.body, color: colors.text.secondary },
+  previewTitle: { ...typography.h3 },
+  previewConfirm: {
+    ...typography.body, fontWeight: '700', color: colors.primary, textAlign: 'right',
+  },
+
   photo: { width: '100%', aspectRatio: 3 / 4, borderRadius: radius.xl, marginBottom: spacing.lg },
   photoFade: { opacity: 0.4 },
   readyBtns: { flexDirection: 'row', gap: spacing.md },
   btnHalf: { flex: 1 },
+  errorBox: {
+    backgroundColor: '#FFF3CD', borderRadius: radius.lg, padding: spacing.md,
+    marginBottom: spacing.md, borderWidth: 1, borderColor: '#FFC107',
+  },
+  errorText: { ...typography.bodySmall, color: '#856404' },
   analyzing: { alignItems: 'center', position: 'relative', marginBottom: spacing.lg },
   analyzingOverlay: {
     position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
