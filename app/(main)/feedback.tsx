@@ -69,7 +69,7 @@ function DalleImage({ uri, failed }: { uri?: string; failed?: boolean }) {
 }
 const di = StyleSheet.create({
   wrap: { position: 'relative' },
-  img: { width: '100%', aspectRatio: 1, borderRadius: radius.lg },
+  img: { width: '100%', aspectRatio: 3 / 4, borderRadius: radius.lg },
   spinner: {
     position: 'absolute', inset: 0, zIndex: 1,
     alignItems: 'center', justifyContent: 'center',
@@ -77,12 +77,12 @@ const di = StyleSheet.create({
   },
   spinnerText: { ...typography.caption, color: colors.text.tertiary },
   placeholder: {
-    width: '100%', aspectRatio: 1, borderRadius: radius.lg,
+    width: '100%', aspectRatio: 3 / 4, borderRadius: radius.lg,
     backgroundColor: colors.surface, alignItems: 'center',
     justifyContent: 'center', gap: spacing.xs,
     borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed',
   },
-  placeholderEmoji: { fontSize: 28 },
+  placeholderEmoji: { fontSize: 36 },
   placeholderText: { ...typography.caption, color: colors.text.tertiary },
 });
 
@@ -269,7 +269,7 @@ function ResultView({
   const avgScore = Math.round(
     (feedback.scores.color_harmony + feedback.scores.season_fit + feedback.scores.tpo_fit) / 3
   );
-  const hasImages = !!(feedback.current_image_url || feedback.suggestion_image_url);
+  const hasImages = !!feedback.suggestion_image_url;
 
   return (
     <View style={r.wrap}>
@@ -350,27 +350,18 @@ function ResultView({
         </View>
       )}
 
-      {/* ⑦ AI 생성 이미지 2장 */}
+      {/* ⑦ AI 추천 스타일 이미지 (수정 제안 1장) */}
       <View style={[r.card, shadow.sm]}>
-        <Text style={r.cardTitle}>🎨 AI 생성 이미지</Text>
-        {feedback.image_error && !hasImages ? (
+        <Text style={r.cardTitle}>🎨 AI 추천 스타일</Text>
+        {feedback.image_error && !feedback.suggestion_image_url ? (
           <View style={r.imageError}>
             <Text style={r.imageErrorEmoji}>🖼️</Text>
             <Text style={r.imageErrorText}>{feedback.image_error}</Text>
           </View>
         ) : (
           <>
-            <Text style={r.dalleSubtitle}>현재 착장과 AI 수정 제안을 시각화했어요</Text>
-            <View style={r.dalleRow}>
-              <View style={r.dalleCol}>
-                <Text style={r.dalleLabel}>현재 착장</Text>
-                <DalleImage uri={feedback.current_image_url} failed={!feedback.current_image_url} />
-              </View>
-              <View style={r.dalleCol}>
-                <Text style={r.dalleLabel}>수정 제안</Text>
-                <DalleImage uri={feedback.suggestion_image_url} failed={!feedback.suggestion_image_url} />
-              </View>
-            </View>
+            <Text style={r.dalleSubtitle}>개선 제안을 반영한 스타일을 시각화했어요</Text>
+            <DalleImage uri={feedback.suggestion_image_url} failed={!feedback.suggestion_image_url} />
             <Text style={r.dalleCaption}>AI가 생성한 참고 이미지입니다</Text>
           </>
         )}
@@ -456,11 +447,5 @@ const r = StyleSheet.create({
   imageErrorEmoji: { fontSize: 36 },
   imageErrorText: { ...typography.bodySmall, color: colors.text.tertiary, textAlign: 'center' },
   dalleSubtitle: { ...typography.bodySmall, color: colors.text.secondary, marginBottom: spacing.md },
-  dalleRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
-  dalleCol: { flex: 1, gap: spacing.xs },
-  dalleLabel: {
-    ...typography.caption, fontWeight: '700', color: colors.text.secondary,
-    textAlign: 'center', marginBottom: spacing.xs,
-  },
-  dalleCaption: { ...typography.caption, color: colors.text.tertiary, textAlign: 'center', marginTop: spacing.xs },
+  dalleCaption: { ...typography.caption, color: colors.text.tertiary, textAlign: 'center', marginTop: spacing.sm },
 });
