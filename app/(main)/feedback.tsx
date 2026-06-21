@@ -371,7 +371,7 @@ function ResultView({
                 <DalleImage uri={feedback.suggestion_image_url} failed={!feedback.suggestion_image_url} />
               </View>
             </View>
-            <Text style={r.dalleCaption}>Gemini로 생성된 참고 이미지입니다</Text>
+            <Text style={r.dalleCaption}>AI가 생성한 참고 이미지입니다</Text>
           </>
         )}
       </View>
