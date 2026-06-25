@@ -5,9 +5,11 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 import { useWeatherStore } from '@/stores/weatherStore';
 import { useWardrobeStore } from '@/stores/wardrobeStore';
+import { useLanguageStore } from '@/stores/languageStore';
 import { api } from '@/services/api';
 import { Button } from '@/components/Button';
 import { OutfitFeedback } from '@/types';
@@ -39,13 +41,14 @@ const score_s = StyleSheet.create({
 
 // ── AI 이미지 (로딩 스피너 / 실패 상태 포함) ────────────
 function DalleImage({ uri, failed }: { uri?: string; failed?: boolean }) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
 
   if (failed || !uri) {
     return (
       <View style={di.placeholder}>
         <Text style={di.placeholderEmoji}>🖼️</Text>
-        <Text style={di.placeholderText}>{failed ? '생성 실패' : '생성 중…'}</Text>
+        <Text style={di.placeholderText}>{failed ? t('feedback.aiImageFail') : t('common.loading')}</Text>
       </View>
     );
   }
@@ -54,7 +57,7 @@ function DalleImage({ uri, failed }: { uri?: string; failed?: boolean }) {
       {loading && (
         <View style={di.spinner}>
           <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={di.spinnerText}>불러오는 중</Text>
+          <Text style={di.spinnerText}>{t('feedback.aiImageLoading')}</Text>
         </View>
       )}
       <Image
@@ -90,9 +93,11 @@ const di = StyleSheet.create({
 type Phase = 'pick' | 'preview' | 'analyzing' | 'result';
 
 export default function FeedbackScreen() {
+  const { t } = useTranslation();
   const { user } = useAuthStore();
   const { weather } = useWeatherStore();
   const { items } = useWardrobeStore();
+  const { language } = useLanguageStore();
 
   const [phase, setPhase] = useState<Phase>('pick');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -111,7 +116,7 @@ export default function FeedbackScreen() {
 
     if (fromCamera) {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) { Alert.alert('권한 필요', '카메라 접근 권한이 필요합니다.'); return; }
+      if (!perm.granted) { Alert.alert(t('feedback.cameraPermission'), t('feedback.cameraPermissionMsg')); return; }
       const res = await ImagePicker.launchCameraAsync(opts);
       if (!res.canceled && res.assets[0]) {
         const asset = res.assets[0];
@@ -122,7 +127,7 @@ export default function FeedbackScreen() {
       }
     } else {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) { Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.'); return; }
+      if (!perm.granted) { Alert.alert(t('feedback.galleryPermission'), t('feedback.galleryPermissionMsg')); return; }
       const res = await ImagePicker.launchImageLibraryAsync(opts);
       if (!res.canceled && res.assets[0]) {
         const asset = res.assets[0];
@@ -135,10 +140,10 @@ export default function FeedbackScreen() {
   };
 
   const showPickerAlert = () => {
-    Alert.alert('사진 선택', '착장 사진을 어떻게 가져올까요?', [
-      { text: '📷 카메라 촬영', onPress: () => pickPhoto(true) },
-      { text: '🖼️ 갤러리에서 선택', onPress: () => pickPhoto(false) },
-      { text: '취소', style: 'cancel' },
+    Alert.alert(t('feedback.photoAlert'), '', [
+      { text: t('feedback.cameraOption'), onPress: () => pickPhoto(true) },
+      { text: t('feedback.galleryOption'), onPress: () => pickPhoto(false) },
+      { text: t('feedback.cancelOption'), style: 'cancel' },
     ]);
   };
 
@@ -150,9 +155,10 @@ export default function FeedbackScreen() {
     try {
       const result: OutfitFeedback = await api.post('/api/v1/feedback/analyze', {
         photo_url: photoUri,
-        photo_base64: photoBase64,   // ImagePicker base64: true 로 받은 데이터
+        photo_base64: photoBase64,
         photo_mime_type: photoMime,
         user_id: user.id,
+        language,                    // AI 응답 언어 전달
         weather_context: weather,
         user_context: {
           age_group: user.age_group,
@@ -184,23 +190,29 @@ export default function FeedbackScreen() {
         {/* PHASE: pick */}
         {phase === 'pick' && (
           <>
-            <Text style={s.title}>📸 오늘 옷 평가받기</Text>
+            <Text style={s.title}>{t('feedback.title')}</Text>
             <TouchableOpacity style={[s.photoArea, shadow.sm]} onPress={showPickerAlert}>
               <Text style={s.cameraEmoji}>📷</Text>
-              <Text style={s.cameraLabel}>탭하여 착장 사진 추가</Text>
-              <Text style={s.cameraSub}>카메라 촬영 또는 갤러리 업로드</Text>
+              <Text style={s.cameraLabel}>{t('feedback.photoAreaLabel')}</Text>
+              <Text style={s.cameraSub}>{t('feedback.photoAreaSub')}</Text>
             </TouchableOpacity>
             {(weather || user?.today_activity) && (
               <View style={s.contextBox}>
-                <Text style={s.contextTitle}>분석에 반영될 정보</Text>
+                <Text style={s.contextTitle}>{t('feedback.contextTitle')}</Text>
                 {weather && (
-                  <Text style={s.contextItem}>🌤 {weather.temperature}° {weather.condition} · 강수 {weather.precipitation_prob}%</Text>
+                  <Text style={s.contextItem}>{t('feedback.weatherInfo', {
+                    temp: weather.temperature,
+                    condition: weather.condition,
+                    rain: weather.precipitation_prob,
+                  })}</Text>
                 )}
                 {user?.today_activity && (
-                  <Text style={s.contextItem}>📍 오늘 활동: {user.today_activity}</Text>
+                  <Text style={s.contextItem}>{t('feedback.activityInfo', {
+                    activity: t(`activities.${user.today_activity}` as any),
+                  })}</Text>
                 )}
                 {user?.additional_request && (
-                  <Text style={s.contextItem}>💬 요청: {user.additional_request}</Text>
+                  <Text style={s.contextItem}>{t('feedback.requestInfo', { request: user.additional_request })}</Text>
                 )}
               </View>
             )}
@@ -210,30 +222,27 @@ export default function FeedbackScreen() {
         {/* PHASE: preview — 사진 확인 화면 ("확인" 버튼 포함) */}
         {phase === 'preview' && photoUri && (
           <>
-            {/* 상단 헤더: 다시 선택 ← | → 확인 */}
             <View style={s.previewHeader}>
               <TouchableOpacity onPress={showPickerAlert} style={s.previewHeaderBtn}>
-                <Text style={s.previewHeaderBack}>← 다시 선택</Text>
+                <Text style={s.previewHeaderBack}>{t('feedback.previewBack')}</Text>
               </TouchableOpacity>
-              <Text style={s.previewTitle}>사진 확인</Text>
+              <Text style={s.previewTitle}>{t('feedback.previewTitle')}</Text>
               <TouchableOpacity onPress={analyze} style={s.previewHeaderBtn}>
-                <Text style={s.previewConfirm}>확인</Text>
+                <Text style={s.previewConfirm}>{t('feedback.previewConfirm')}</Text>
               </TouchableOpacity>
             </View>
 
             <Image source={{ uri: photoUri }} style={[s.photo, shadow.md]} resizeMode="cover" />
 
-            {/* 오류 메시지 */}
             {apiError && (
               <View style={s.errorBox}>
                 <Text style={s.errorText}>⚠️ {apiError}</Text>
               </View>
             )}
 
-            {/* 하단 버튼 */}
             <View style={s.readyBtns}>
-              <Button title="다시 선택" onPress={showPickerAlert} variant="secondary" style={s.btnHalf} />
-              <Button title="AI 분석 시작 ✨" onPress={analyze} style={s.btnHalf} />
+              <Button title={t('feedback.reselect')} onPress={showPickerAlert} variant="secondary" style={s.btnHalf} />
+              <Button title={t('feedback.analyzeBtn')} onPress={analyze} style={s.btnHalf} />
             </View>
           </>
         )}
@@ -244,8 +253,8 @@ export default function FeedbackScreen() {
             {photoUri && <Image source={{ uri: photoUri }} style={[s.photo, s.photoFade]} resizeMode="cover" />}
             <View style={s.analyzingOverlay}>
               <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={s.analyzingTitle}>AI가 분석 중이에요…</Text>
-              <Text style={s.analyzingDesc}>날씨·활동·요청사항을 종합하고 있어요</Text>
+              <Text style={s.analyzingTitle}>{t('feedback.analyzingTitle')}</Text>
+              <Text style={s.analyzingDesc}>{t('feedback.analyzingDesc')}</Text>
             </View>
           </View>
         )}
@@ -264,12 +273,12 @@ export default function FeedbackScreen() {
 function ResultView({
   feedback, photoUri, onRetry,
 }: { feedback: OutfitFeedback; photoUri: string | null; onRetry: () => void }) {
+  const { t } = useTranslation();
   const isOk = feedback.overall === 'ok';
   const badgeColor = isOk ? colors.success : colors.warning;
   const avgScore = Math.round(
     (feedback.scores.color_harmony + feedback.scores.season_fit + feedback.scores.tpo_fit) / 3
   );
-  const hasImages = !!feedback.suggestion_image_url;
 
   return (
     <View style={r.wrap}>
@@ -278,7 +287,9 @@ function ResultView({
         <View style={r.photoWrap}>
           <Image source={{ uri: photoUri }} style={r.photo} resizeMode="cover" />
           <View style={[r.badge, { backgroundColor: badgeColor }]}>
-            <Text style={r.badgeText}>{isOk ? '✅ 오늘 코디 완벽!' : '⚠️ 수정 제안 있어요'}</Text>
+            <Text style={r.badgeText}>
+              {isOk ? t('feedback.badgeOk') : t('feedback.badgeNeedsImprovement')}
+            </Text>
           </View>
         </View>
       )}
@@ -286,7 +297,7 @@ function ResultView({
       {/* ② 종합 평가 */}
       {!!feedback.overall_comment && (
         <View style={[r.card, shadow.sm]}>
-          <Text style={r.cardTitle}>🧑‍💼 AI 종합 평가</Text>
+          <Text style={r.cardTitle}>{t('feedback.overallTitle')}</Text>
           <Text style={r.overallComment}>{feedback.overall_comment}</Text>
         </View>
       )}
@@ -294,18 +305,18 @@ function ResultView({
       {/* ③ 항목별 점수 + 코멘트 */}
       <View style={[r.card, shadow.sm]}>
         <View style={r.scoreHeader}>
-          <Text style={r.cardTitle}>📊 항목별 점수</Text>
-          <Text style={[r.avgScore, { color: badgeColor }]}>평균 {avgScore}점</Text>
+          <Text style={r.cardTitle}>{t('feedback.scoreTitle')}</Text>
+          <Text style={[r.avgScore, { color: badgeColor }]}>{t('feedback.avgScore', { score: avgScore })}</Text>
         </View>
-        <ScoreBar label="색상 조화" score={feedback.scores.color_harmony} />
+        <ScoreBar label={t('feedback.colorHarmony')} score={feedback.scores.color_harmony} />
         {!!feedback.item_comments?.color_harmony && (
           <Text style={r.itemComment}>{feedback.item_comments.color_harmony}</Text>
         )}
-        <ScoreBar label="계절감" score={feedback.scores.season_fit} />
+        <ScoreBar label={t('feedback.seasonFit')} score={feedback.scores.season_fit} />
         {!!feedback.item_comments?.season_fit && (
           <Text style={r.itemComment}>{feedback.item_comments.season_fit}</Text>
         )}
-        <ScoreBar label="TPO 적합성" score={feedback.scores.tpo_fit} />
+        <ScoreBar label={t('feedback.tpoFit')} score={feedback.scores.tpo_fit} />
         {!!feedback.item_comments?.tpo_fit && (
           <Text style={r.itemComment}>{feedback.item_comments.tpo_fit}</Text>
         )}
@@ -314,7 +325,7 @@ function ResultView({
       {/* ④ 잘된 점 */}
       {(feedback.good_points?.length ?? 0) > 0 && (
         <View style={[r.card, shadow.sm]}>
-          <Text style={r.cardTitle}>✅ 잘된 점</Text>
+          <Text style={r.cardTitle}>{t('feedback.goodPointsTitle')}</Text>
           {feedback.good_points!.map((pt, i) => (
             <View key={i} style={r.listRow}>
               <Text style={[r.bullet, { color: colors.success }]}>✓</Text>
@@ -327,7 +338,7 @@ function ResultView({
       {/* ⑤ 개선 제안 */}
       {feedback.suggestions.length > 0 && (
         <View style={[r.card, shadow.sm]}>
-          <Text style={r.cardTitle}>💡 개선 포인트</Text>
+          <Text style={r.cardTitle}>{t('feedback.suggestionsTitle')}</Text>
           {feedback.suggestions.map((sg, i) => (
             <View key={i} style={r.listRow}>
               <Text style={[r.bullet, { color: colors.accent }]}>•</Text>
@@ -340,7 +351,7 @@ function ResultView({
       {/* ⑥ 스타일링 팁 */}
       {(feedback.styling_tips?.length ?? 0) > 0 && (
         <View style={[r.card, { ...shadow.sm, backgroundColor: colors.accentLight }]}>
-          <Text style={[r.cardTitle, { color: colors.accent }]}>✨ 스타일링 팁</Text>
+          <Text style={[r.cardTitle, { color: colors.accent }]}>{t('feedback.tipsTitle')}</Text>
           {feedback.styling_tips!.map((tip, i) => (
             <View key={i} style={r.listRow}>
               <Text style={[r.bullet, { color: colors.accent }]}>{i + 1}.</Text>
@@ -350,24 +361,24 @@ function ResultView({
         </View>
       )}
 
-      {/* ⑦ AI 추천 스타일 이미지 (수정 제안 1장) */}
+      {/* ⑦ AI 추천 스타일 이미지 */}
       <View style={[r.card, shadow.sm]}>
-        <Text style={r.cardTitle}>🎨 AI 추천 스타일</Text>
+        <Text style={r.cardTitle}>{t('feedback.aiImageTitle')}</Text>
         {feedback.image_error && !feedback.suggestion_image_url ? (
           <View style={r.imageError}>
             <Text style={r.imageErrorEmoji}>🖼️</Text>
-            <Text style={r.imageErrorText}>{feedback.image_error}</Text>
+            <Text style={r.imageErrorText}>{t('feedback.imageErrorText')}</Text>
           </View>
         ) : (
           <>
-            <Text style={r.dalleSubtitle}>개선 제안을 반영한 스타일을 시각화했어요</Text>
+            <Text style={r.dalleSubtitle}>{t('feedback.aiImageSub')}</Text>
             <DalleImage uri={feedback.suggestion_image_url} failed={!feedback.suggestion_image_url} />
-            <Text style={r.dalleCaption}>AI가 생성한 참고 이미지입니다</Text>
+            <Text style={r.dalleCaption}>{t('feedback.aiImageCaption')}</Text>
           </>
         )}
       </View>
 
-      <Button title="다시 평가받기" onPress={onRetry} variant="secondary" />
+      <Button title={t('feedback.retryBtn')} onPress={onRetry} variant="secondary" />
     </View>
   );
 }

@@ -4,15 +4,17 @@ import {
   TouchableOpacity, Alert, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
+import { useLanguageStore } from '@/stores/languageStore';
 import { Button } from '@/components/Button';
 import { AgeGroup, TodayActivity, TODAY_ACTIVITY_LABELS } from '@/types';
 import { colors, typography, spacing, radius, shadow } from '@/constants/theme';
+import type { Language } from '@/i18n';
 
 const AGE_OPTIONS: AgeGroup[] = ['10대', '20대', '30대', '40대', '50대 이상'];
 const ACTIVITY_OPTIONS: TodayActivity[] = ['등교', '출근', '운동', '데이트', '기타'];
 
-// ── 행 컴포넌트 ───────────────────────────────────────
 function SettingsRow({ label, value, onPress }: { label: string; value?: string; onPress?: () => void }) {
   return (
     <TouchableOpacity style={s.row} onPress={onPress} disabled={!onPress} activeOpacity={0.7}>
@@ -25,11 +27,11 @@ function SettingsRow({ label, value, onPress }: { label: string; value?: string;
   );
 }
 
-// ── 메인 ─────────────────────────────────────────────
 export default function SettingsScreen() {
+  const { t } = useTranslation();
   const { user, updateProfile, resetProfile } = useAuthStore();
+  const { language, setLanguage } = useLanguageStore();
 
-  // ── 편집 상태 ──────────────────────────────────────
   const [isEditing, setIsEditing] = useState(false);
   const [ageGroup, setAgeGroup] = useState<AgeGroup | null>(
     (user?.age_group as AgeGroup) ?? null
@@ -51,16 +53,15 @@ export default function SettingsScreen() {
         additional_request: additionalRequest,
       });
       setIsEditing(false);
-      Alert.alert('저장 완료', '프로필이 업데이트되었어요.');
+      Alert.alert(t('common.ok'), t('settings.savedMsg'));
     } catch {
-      Alert.alert('오류', '저장에 실패했습니다.');
+      Alert.alert(t('common.error'), t('settings.saveError'));
     } finally {
       setIsSaving(false);
     }
   };
 
   const cancelEdit = () => {
-    // 원래 값으로 되돌리기
     setAgeGroup((user?.age_group as AgeGroup) ?? null);
     setJob(user?.job ?? '');
     setTodayActivity((user?.today_activity as TodayActivity) ?? null);
@@ -70,12 +71,12 @@ export default function SettingsScreen() {
 
   const handleReset = () => {
     Alert.alert(
-      '앱 데이터 초기화',
-      '프로필과 설정이 모두 삭제되고 온보딩 화면으로 돌아갑니다. 계속하시겠어요?',
+      t('settings.resetTitle'),
+      t('settings.resetMsg'),
       [
-        { text: '취소', style: 'cancel' },
+        { text: t('settings.resetCancel'), style: 'cancel' },
         {
-          text: '초기화', style: 'destructive', onPress: async () => {
+          text: t('settings.resetConfirm'), style: 'destructive', onPress: async () => {
             await resetProfile();
           },
         },
@@ -83,45 +84,52 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleLanguageToggle = async (lang: Language) => {
+    await setLanguage(lang);
+  };
+
   return (
     <SafeAreaView style={s.container}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={s.title}>⚙️ 설정</Text>
+        <Text style={s.title}>{t('settings.title')}</Text>
 
         {/* 내 프로필 */}
         <View style={[s.section, shadow.sm]}>
           <View style={s.sectionHeader}>
-            <Text style={s.sectionTitle}>내 프로필</Text>
+            <Text style={s.sectionTitle}>{t('settings.profileSection')}</Text>
             {!isEditing && (
               <TouchableOpacity onPress={() => setIsEditing(true)} style={s.editBtn}>
-                <Text style={s.editBtnText}>편집</Text>
+                <Text style={s.editBtnText}>{t('common.edit')}</Text>
               </TouchableOpacity>
             )}
           </View>
 
           {!isEditing ? (
-            // ── 보기 모드 ─────────────────────────────
             <>
-              <SettingsRow label="연령대" value={user?.age_group || '미설정'} />
-              <SettingsRow label="직업 / 소속" value={user?.job || '미설정'} />
               <SettingsRow
-                label="오늘 활동"
+                label={t('settings.ageLabel')}
+                value={user?.age_group ? t(`ageGroups.${user.age_group}` as any) : t('settings.notSet')}
+              />
+              <SettingsRow label={t('settings.jobLabel')} value={user?.job || t('settings.notSet')} />
+              <SettingsRow
+                label={t('settings.activityLabel')}
                 value={
                   user?.today_activity
-                    ? `${TODAY_ACTIVITY_LABELS[user.today_activity as TodayActivity]?.emoji ?? ''} ${user.today_activity}`
-                    : '미설정'
+                    ? `${TODAY_ACTIVITY_LABELS[user.today_activity as TodayActivity]?.emoji ?? ''} ${t(`activities.${user.today_activity}` as any)}`
+                    : t('settings.notSet')
                 }
               />
               <SettingsRow
-                label="AI 요청사항"
-                value={user?.additional_request ? user.additional_request.slice(0, 30) + (user.additional_request.length > 30 ? '…' : '') : '없음'}
+                label={t('settings.requestLabel')}
+                value={user?.additional_request
+                  ? user.additional_request.slice(0, 30) + (user.additional_request.length > 30 ? '…' : '')
+                  : t('settings.none')}
               />
             </>
           ) : (
-            // ── 편집 모드 ─────────────────────────────
             <View style={s.editor}>
               {/* 연령대 */}
-              <Text style={s.editorLabel}>연령대</Text>
+              <Text style={s.editorLabel}>{t('settings.ageLabel')}</Text>
               <View style={s.chipRow}>
                 {AGE_OPTIONS.map((age) => (
                   <TouchableOpacity
@@ -129,23 +137,25 @@ export default function SettingsScreen() {
                     style={[s.chip, ageGroup === age && s.chipActive]}
                     onPress={() => setAgeGroup(age)}
                   >
-                    <Text style={[s.chipText, ageGroup === age && s.chipTextActive]}>{age}</Text>
+                    <Text style={[s.chipText, ageGroup === age && s.chipTextActive]}>
+                      {t(`ageGroups.${age}` as any)}
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
               {/* 직업 */}
-              <Text style={[s.editorLabel, { marginTop: spacing.md }]}>직업 / 소속</Text>
+              <Text style={[s.editorLabel, { marginTop: spacing.md }]}>{t('settings.jobLabel')}</Text>
               <TextInput
                 style={s.input}
                 value={job}
                 onChangeText={setJob}
-                placeholder="예: 대학생, 직장인, 프리랜서…"
+                placeholder={t('settings.jobPlaceholder')}
                 placeholderTextColor={colors.text.tertiary}
               />
 
               {/* 오늘 활동 */}
-              <Text style={[s.editorLabel, { marginTop: spacing.md }]}>오늘 활동</Text>
+              <Text style={[s.editorLabel, { marginTop: spacing.md }]}>{t('settings.activityLabel')}</Text>
               <View style={s.activityRow}>
                 {ACTIVITY_OPTIONS.map((act) => (
                   <TouchableOpacity
@@ -154,45 +164,69 @@ export default function SettingsScreen() {
                     onPress={() => setTodayActivity(act)}
                   >
                     <Text style={s.actEmoji}>{TODAY_ACTIVITY_LABELS[act].emoji}</Text>
-                    <Text style={[s.actLabel, todayActivity === act && s.actLabelActive]}>{act}</Text>
+                    <Text style={[s.actLabel, todayActivity === act && s.actLabelActive]}>
+                      {t(`activities.${act}` as any)}
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
               {/* 추가 요청사항 */}
-              <Text style={[s.editorLabel, { marginTop: spacing.md }]}>AI 요청사항</Text>
+              <Text style={[s.editorLabel, { marginTop: spacing.md }]}>{t('settings.requestLabel')}</Text>
               <TextInput
                 style={[s.input, s.textArea]}
                 value={additionalRequest}
                 onChangeText={setAdditionalRequest}
-                placeholder={'예: 키가 작아서 세로로 길어 보이는 스타일을 선호해요.\n예: 색깔 조합이 튀지 않았으면 좋겠어요.'}
+                placeholder={t('settings.requestPlaceholder')}
                 placeholderTextColor={colors.text.tertiary}
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
               />
 
-              {/* 버튼 */}
               <View style={s.editorBtns}>
-                <Button title="취소" onPress={cancelEdit} variant="secondary" style={s.btnHalf} />
-                <Button title="저장" onPress={saveProfile} isLoading={isSaving} style={s.btnHalf} />
+                <Button title={t('common.cancel')} onPress={cancelEdit} variant="secondary" style={s.btnHalf} />
+                <Button title={t('common.save')} onPress={saveProfile} isLoading={isSaving} style={s.btnHalf} />
               </View>
             </View>
           )}
         </View>
 
-        {/* 앱 정보 */}
+        {/* 언어 설정 */}
         <View style={[s.section, shadow.sm]}>
-          <Text style={s.sectionTitle}>앱 정보</Text>
-          <SettingsRow label="버전" value="v1.0.0" />
-          <SettingsRow label="개인정보 처리방침" onPress={() => {}} />
-          <SettingsRow label="이용약관" onPress={() => {}} />
+          <View style={s.sectionHeaderFlat}>
+            <Text style={s.sectionTitle}>{t('settings.languageSection')}</Text>
+          </View>
+          <View style={s.langToggleRow}>
+            <TouchableOpacity
+              style={[s.langToggleBtn, language === 'ko' && s.langToggleBtnActive]}
+              onPress={() => handleLanguageToggle('ko')}
+            >
+              <Text style={[s.langToggleText, language === 'ko' && s.langToggleTextActive]}>
+                🇰🇷 한국어
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.langToggleBtn, language === 'en' && s.langToggleBtnActive]}
+              onPress={() => handleLanguageToggle('en')}
+            >
+              <Text style={[s.langToggleText, language === 'en' && s.langToggleTextActive]}>
+                🇺🇸 English
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* 데이터 초기화 */}
-        <Button title="앱 데이터 초기화" onPress={handleReset} variant="secondary" style={s.signOutBtn} />
+        {/* 앱 정보 */}
+        <View style={[s.section, shadow.sm]}>
+          <Text style={s.sectionTitle}>{t('settings.appInfoSection')}</Text>
+          <SettingsRow label={t('settings.version')} value={t('common.version')} />
+          <SettingsRow label={t('settings.privacy')} onPress={() => {}} />
+          <SettingsRow label={t('settings.terms')} onPress={() => {}} />
+        </View>
 
-        <Text style={s.version}>오늘 뭐 입지 • AI 패션 어시스턴트</Text>
+        <Button title={t('settings.resetBtn')} onPress={handleReset} variant="secondary" style={s.signOutBtn} />
+        <Text style={s.version}>{t('settings.appTagline')}</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -213,6 +247,11 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  sectionHeaderFlat: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
@@ -246,26 +285,14 @@ const s = StyleSheet.create({
   rowValue: { ...typography.body, color: colors.text.secondary },
   rowArrow: { fontSize: 20, color: colors.text.tertiary },
 
-  editor: {
-    padding: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  editorLabel: {
-    ...typography.bodySmall,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: spacing.sm,
-  },
+  editor: { padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
+  editorLabel: { ...typography.bodySmall, fontWeight: '600', color: colors.text.primary, marginBottom: spacing.sm },
 
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-    backgroundColor: colors.background,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    borderRadius: radius.full, backgroundColor: colors.background,
+    borderWidth: 1.5, borderColor: colors.border,
   },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { ...typography.bodySmall, fontWeight: '600', color: colors.text.secondary },
@@ -273,15 +300,10 @@ const s = StyleSheet.create({
 
   activityRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   actChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-    backgroundColor: colors.background,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    borderRadius: radius.full, backgroundColor: colors.background,
+    borderWidth: 1.5, borderColor: colors.border,
   },
   actChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   actEmoji: { fontSize: 16 },
@@ -289,17 +311,28 @@ const s = StyleSheet.create({
   actLabelActive: { color: '#fff' },
 
   input: {
-    backgroundColor: colors.background,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    ...typography.body,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    backgroundColor: colors.background, borderRadius: radius.md,
+    padding: spacing.md, ...typography.body,
+    borderWidth: 1.5, borderColor: colors.border,
   },
   textArea: { minHeight: 100, textAlignVertical: 'top' },
 
   editorBtns: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
   btnHalf: { flex: 1 },
+
+  // 언어 토글
+  langToggleRow: {
+    flexDirection: 'row', gap: spacing.sm,
+    padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  langToggleBtn: {
+    flex: 1, paddingVertical: spacing.sm, alignItems: 'center',
+    borderRadius: radius.full, borderWidth: 1.5, borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  langToggleBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  langToggleText: { ...typography.bodySmall, fontWeight: '700', color: colors.text.secondary },
+  langToggleTextActive: { color: '#fff' },
 
   signOutBtn: { marginBottom: spacing.lg },
   version: { ...typography.caption, textAlign: 'center', color: colors.text.tertiary },

@@ -5,10 +5,13 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useOnboardingStore } from '@/stores/onboardingStore';
+import { useLanguageStore } from '@/stores/languageStore';
 import { Button } from '@/components/Button';
 import { AgeGroup, TodayActivity, TODAY_ACTIVITY_LABELS } from '@/types';
 import { colors, typography, spacing, radius } from '@/constants/theme';
+import type { Language } from '@/i18n';
 
 const AGE_OPTIONS: AgeGroup[] = ['10대', '20대', '30대', '40대', '50대 이상'];
 const ACTIVITY_OPTIONS: TodayActivity[] = ['등교', '출근', '운동', '데이트', '기타'];
@@ -24,15 +27,59 @@ function ProgressBar({ current, total }: { current: number; total: number }) {
   );
 }
 
+// ── Step 0: 언어 선택 ────────────────────────────────
+function LanguageStep({ onNext }: { onNext: () => void }) {
+  const { t } = useTranslation();
+  const { language, setLanguage } = useLanguageStore();
+  const [selected, setSelected] = useState<Language>(language);
+
+  const handleSelect = async (lang: Language) => {
+    setSelected(lang);
+    await setLanguage(lang);
+  };
+
+  return (
+    <View style={styles.step}>
+      <Text style={styles.stepTitle}>{t('language.title')}</Text>
+      <Text style={styles.stepSub}>{t('language.subtitle')}</Text>
+
+      <View style={styles.langRow}>
+        <TouchableOpacity
+          style={[styles.langCard, selected === 'ko' && styles.langCardActive]}
+          onPress={() => handleSelect('ko')}
+        >
+          <Text style={styles.langFlag}>🇰🇷</Text>
+          <Text style={[styles.langLabel, selected === 'ko' && styles.langLabelActive]}>
+            {t('language.korean')}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.langCard, selected === 'en' && styles.langCardActive]}
+          onPress={() => handleSelect('en')}
+        >
+          <Text style={styles.langFlag}>🇺🇸</Text>
+          <Text style={[styles.langLabel, selected === 'en' && styles.langLabelActive]}>
+            {t('language.english')}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <Button title={t('common.next')} onPress={onNext} style={styles.btn} />
+    </View>
+  );
+}
+
 // ── Step 1: 연령 + 직업 ──────────────────────────────
 function Step1({ onNext }: { onNext: () => void }) {
+  const { t } = useTranslation();
   const { ageGroup, setAgeGroup, job, setJob } = useOnboardingStore();
   return (
     <View style={styles.step}>
-      <Text style={styles.stepTitle}>기본 정보를 알려주세요</Text>
-      <Text style={styles.stepSub}>더 정확한 코디 평가를 위해 사용됩니다</Text>
+      <Text style={styles.stepTitle}>{t('onboarding.step1Title')}</Text>
+      <Text style={styles.stepSub}>{t('onboarding.step1Sub')}</Text>
 
-      <Text style={styles.label}>연령대</Text>
+      <Text style={styles.label}>{t('onboarding.ageLabel')}</Text>
       <View style={styles.chipRow}>
         {AGE_OPTIONS.map((age) => (
           <TouchableOpacity
@@ -40,32 +87,35 @@ function Step1({ onNext }: { onNext: () => void }) {
             style={[styles.chip, ageGroup === age && styles.chipActive]}
             onPress={() => setAgeGroup(age)}
           >
-            <Text style={[styles.chipText, ageGroup === age && styles.chipTextActive]}>{age}</Text>
+            <Text style={[styles.chipText, ageGroup === age && styles.chipTextActive]}>
+              {t(`ageGroups.${age}` as any)}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={[styles.label, { marginTop: spacing.lg }]}>직업 / 소속</Text>
+      <Text style={[styles.label, { marginTop: spacing.lg }]}>{t('onboarding.jobLabel')}</Text>
       <TextInput
         style={styles.input}
         value={job}
         onChangeText={setJob}
-        placeholder="예: 대학생, 직장인, 프리랜서…"
+        placeholder={t('onboarding.jobPlaceholder')}
         placeholderTextColor={colors.text.tertiary}
       />
 
-      <Button title="다음" onPress={onNext} style={styles.btn} />
+      <Button title={t('common.next')} onPress={onNext} style={styles.btn} />
     </View>
   );
 }
 
 // ── Step 2: 오늘 활동 ────────────────────────────────
 function Step2({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) {
+  const { t } = useTranslation();
   const { todayActivity, setTodayActivity, customActivity, setCustomActivity } = useOnboardingStore();
   return (
     <View style={styles.step}>
-      <Text style={styles.stepTitle}>오늘 주요 활동은?</Text>
-      <Text style={styles.stepSub}>TPO에 맞는 피드백을 드릴게요</Text>
+      <Text style={styles.stepTitle}>{t('onboarding.step2Title')}</Text>
+      <Text style={styles.stepSub}>{t('onboarding.step2Sub')}</Text>
 
       <View style={styles.activityGrid}>
         {ACTIVITY_OPTIONS.map((act) => (
@@ -75,7 +125,9 @@ function Step2({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) {
             onPress={() => setTodayActivity(act)}
           >
             <Text style={styles.actEmoji}>{TODAY_ACTIVITY_LABELS[act].emoji}</Text>
-            <Text style={[styles.actLabel, todayActivity === act && styles.actLabelActive]}>{act}</Text>
+            <Text style={[styles.actLabel, todayActivity === act && styles.actLabelActive]}>
+              {t(`activities.${act}` as any)}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -85,14 +137,14 @@ function Step2({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) {
           style={[styles.input, { marginTop: spacing.md }]}
           value={customActivity}
           onChangeText={setCustomActivity}
-          placeholder="오늘 활동을 직접 입력해주세요"
+          placeholder={t('onboarding.customActivityPlaceholder')}
           placeholderTextColor={colors.text.tertiary}
         />
       )}
 
       <View style={styles.btnRow}>
-        <Button title="이전" onPress={onPrev} variant="secondary" style={styles.btnHalf} />
-        <Button title="다음" onPress={onNext} style={styles.btnHalf} />
+        <Button title={t('common.prev')} onPress={onPrev} variant="secondary" style={styles.btnHalf} />
+        <Button title={t('common.next')} onPress={onNext} style={styles.btnHalf} />
       </View>
     </View>
   );
@@ -102,21 +154,18 @@ function Step2({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) {
 function Step3({ onComplete, isSaving, onPrev }: {
   onComplete: () => void; isSaving: boolean; onPrev: () => void;
 }) {
+  const { t } = useTranslation();
   const { additionalRequest, setAdditionalRequest } = useOnboardingStore();
   return (
     <View style={styles.step}>
-      <Text style={styles.stepTitle}>추가 요청사항</Text>
-      <Text style={styles.stepSub}>AI가 평가 시 참고할 내용을 자유롭게 입력하세요</Text>
+      <Text style={styles.stepTitle}>{t('onboarding.step3Title')}</Text>
+      <Text style={styles.stepSub}>{t('onboarding.step3Sub')}</Text>
 
       <TextInput
         style={[styles.input, styles.textArea]}
         value={additionalRequest}
         onChangeText={setAdditionalRequest}
-        placeholder={
-          '예: 키가 작아서 세로로 길어 보이는 스타일을 선호해요.\n' +
-          '예: 색깔 조합이 너무 튀지 않았으면 좋겠어요.\n' +
-          '예: 오늘 비가 올 수도 있어요.'
-        }
+        placeholder={t('onboarding.requestPlaceholder')}
         placeholderTextColor={colors.text.tertiary}
         multiline
         numberOfLines={5}
@@ -124,11 +173,11 @@ function Step3({ onComplete, isSaving, onPrev }: {
       />
 
       <View style={styles.btnRow}>
-        <Button title="이전" onPress={onPrev} variant="secondary" style={styles.btnHalf} />
-        <Button title="완료!" onPress={onComplete} isLoading={isSaving} style={styles.btnHalf} />
+        <Button title={t('common.prev')} onPress={onPrev} variant="secondary" style={styles.btnHalf} />
+        <Button title={t('common.done')} onPress={onComplete} isLoading={isSaving} style={styles.btnHalf} />
       </View>
       <TouchableOpacity onPress={onComplete} style={styles.skipBtn}>
-        <Text style={styles.skipText}>건너뛰기</Text>
+        <Text style={styles.skipText}>{t('common.skip')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -136,31 +185,32 @@ function Step3({ onComplete, isSaving, onPrev }: {
 
 // ── 완료 화면 ─────────────────────────────────────────
 function CompletionScreen({ onStart }: { onStart: () => void }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.completion}>
-      <Text style={styles.completionEmoji}>🎉</Text>
-      <Text style={styles.completionTitle}>준비 완료!</Text>
-      <Text style={styles.completionSub}>
-        이제 오늘 착장 사진을 찍으면{'\n'}AI가 바로 피드백을 드려요
-      </Text>
-      <Button title="시작하기" onPress={onStart} style={{ width: '100%' }} />
+      <Text style={styles.completionEmoji}>{t('onboarding.completionEmoji')}</Text>
+      <Text style={styles.completionTitle}>{t('onboarding.completionTitle')}</Text>
+      <Text style={styles.completionSub}>{t('onboarding.completionSub')}</Text>
+      <Button title={t('onboarding.startBtn')} onPress={onStart} style={{ width: '100%' }} />
     </View>
   );
 }
 
 // ── 메인 온보딩 ───────────────────────────────────────
 export default function OnboardingScreen() {
+  const { t } = useTranslation();
   const { currentStep, nextStep, prevStep, saveOnboarding } = useOnboardingStore();
+  const [languageSelected, setLanguageSelected] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const handleComplete = async () => {
     setIsSaving(true);
     try {
-      await saveOnboarding();   // userId 불필요 — AsyncStorage에 직접 저장
+      await saveOnboarding();
       setIsCompleted(true);
     } catch {
-      Alert.alert('오류', '저장에 실패했습니다. 다시 시도해주세요.');
+      Alert.alert(t('common.error'), t('settings.saveError'));
     } finally {
       setIsSaving(false);
     }
@@ -170,6 +220,21 @@ export default function OnboardingScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <CompletionScreen onStart={() => router.replace('/(main)')} />
+      </SafeAreaView>
+    );
+  }
+
+  // 언어 선택 스텝
+  if (!languageSelected) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.topBar}>
+            <ProgressBar current={0} total={3} />
+            <Text style={styles.stepCounter}>0 / 3</Text>
+          </View>
+          <LanguageStep onNext={() => setLanguageSelected(true)} />
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -238,4 +303,15 @@ const styles = StyleSheet.create({
   completionEmoji: { fontSize: 72 },
   completionTitle: { ...typography.h1 },
   completionSub: { ...typography.body, color: colors.text.secondary, textAlign: 'center', lineHeight: 24 },
+  // 언어 선택
+  langRow: { flexDirection: 'row', gap: spacing.lg, marginBottom: spacing.xl },
+  langCard: {
+    flex: 1, paddingVertical: spacing.xl, alignItems: 'center', justifyContent: 'center',
+    borderRadius: radius.xl, backgroundColor: colors.surface,
+    borderWidth: 2, borderColor: colors.border, gap: spacing.sm,
+  },
+  langCardActive: { borderColor: colors.primary, backgroundColor: colors.primary + '15' },
+  langFlag: { fontSize: 40 },
+  langLabel: { ...typography.body, fontWeight: '700', color: colors.text.primary },
+  langLabelActive: { color: colors.primary },
 });

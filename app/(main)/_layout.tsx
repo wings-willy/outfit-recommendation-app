@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { View, Text, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing } from '@/constants/theme';
 
 function TabIcon({ emoji, label, focused }: { emoji: string; label: string; focused: boolean }) {
@@ -19,6 +20,7 @@ const tab = StyleSheet.create({
 });
 
 export default function MainLayout() {
+  const { t } = useTranslation();
   return (
     <Tabs
       screenOptions={{
@@ -35,19 +37,19 @@ export default function MainLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="🏠" label="홈" focused={focused} /> }}
+        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="🏠" label={t('tabs.home')} focused={focused} /> }}
       />
       <Tabs.Screen
         name="feedback"
-        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="📸" label="평가" focused={focused} /> }}
+        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="📸" label={t('tabs.feedback')} focused={focused} /> }}
       />
       <Tabs.Screen
         name="wardrobe"
-        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="👔" label="옷장" focused={focused} /> }}
+        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="👔" label={t('tabs.wardrobe')} focused={focused} /> }}
       />
       <Tabs.Screen
         name="settings"
-        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="⚙️" label="설정" focused={focused} /> }}
+        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="⚙️" label={t('tabs.settings')} focused={focused} /> }}
       />
       {/* 숨김 처리 (탭에는 노출 안 하지만 라우트로 접근 가능) */}
       <Tabs.Screen name="recommendation" options={{ href: null }} />

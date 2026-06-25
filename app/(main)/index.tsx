@@ -5,12 +5,14 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 import { useWeatherStore } from '@/stores/weatherStore';
 import { WeatherCard } from '@/components/WeatherCard';
 import { colors, typography, spacing, radius, shadow } from '@/constants/theme';
 
 export default function HomeScreen() {
+  const { t } = useTranslation();
   const { user } = useAuthStore();
   const { weather, isLoading: weatherLoading, fetchWeatherByLocation } = useWeatherStore();
   const [refreshing, setRefreshing] = useState(false);
@@ -23,8 +25,10 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  const displayName = user?.name || user?.email?.split('@')[0] || '사용자';
-  const activityText = user?.today_activity ? `오늘: ${user.today_activity}` : null;
+  const displayName = user?.name || user?.email?.split('@')[0] || t('home.greeting').replace(' {{name}} 👋', '');
+  const activityText = user?.today_activity
+    ? t('home.todayActivity', { activity: t(`activities.${user.today_activity}` as any) })
+    : null;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -36,9 +40,9 @@ export default function HomeScreen() {
         {/* 헤더 */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>안녕하세요, {displayName}님 👋</Text>
+            <Text style={styles.greeting}>{t('home.greeting', { name: displayName })}</Text>
             <Text style={styles.subGreeting}>
-              {activityText ?? '오늘 코디, AI에게 평가받아보세요'}
+              {activityText ?? t('home.defaultActivity')}
             </Text>
           </View>
           <TouchableOpacity onPress={() => router.push('/(main)/settings')} style={styles.settingsBtn}>
@@ -48,24 +52,23 @@ export default function HomeScreen() {
 
         {/* 날씨 카드 */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🌤 오늘 날씨</Text>
+          <Text style={styles.sectionTitle}>{t('home.weatherTitle')}</Text>
           {weatherLoading ? (
             <View style={styles.weatherSkeleton}>
               <ActivityIndicator color={colors.primary} />
-              <Text style={styles.skeletonText}>날씨 불러오는 중…</Text>
+              <Text style={styles.skeletonText}>{t('home.weatherLoading')}</Text>
             </View>
           ) : weather ? (
             <WeatherCard weather={weather} />
           ) : (
             <TouchableOpacity style={styles.weatherError} onPress={fetchWeatherByLocation}>
-              <Text style={styles.weatherErrorText}>⚠️ 날씨를 불러오지 못했어요. 탭하여 재시도</Text>
+              <Text style={styles.weatherErrorText}>{t('home.weatherError')}</Text>
             </TouchableOpacity>
           )}
         </View>
 
         {/* 메인 CTA */}
         <View style={styles.ctaSection}>
-          {/* 오늘 옷 평가받기 — 메인 버튼 */}
           <TouchableOpacity
             style={[styles.mainCta, shadow.lg]}
             onPress={() => router.push('/(main)/feedback')}
@@ -73,13 +76,12 @@ export default function HomeScreen() {
           >
             <Text style={styles.mainCtaEmoji}>📸</Text>
             <View style={styles.mainCtaText}>
-              <Text style={styles.mainCtaTitle}>오늘 옷 평가받기</Text>
-              <Text style={styles.mainCtaSub}>사진 한 장으로 AI 코디 피드백</Text>
+              <Text style={styles.mainCtaTitle}>{t('home.mainCtaTitle')}</Text>
+              <Text style={styles.mainCtaSub}>{t('home.mainCtaSub')}</Text>
             </View>
             <Text style={styles.mainCtaArrow}>›</Text>
           </TouchableOpacity>
 
-          {/* 내 옷장 — 보조 버튼 */}
           <TouchableOpacity
             style={[styles.subCta, shadow.sm]}
             onPress={() => router.push('/(main)/wardrobe')}
@@ -87,8 +89,8 @@ export default function HomeScreen() {
           >
             <Text style={styles.subCtaEmoji}>👔</Text>
             <View style={styles.subCtaText}>
-              <Text style={styles.subCtaTitle}>내 옷장</Text>
-              <Text style={styles.subCtaSub}>의상 등록 · 관리</Text>
+              <Text style={styles.subCtaTitle}>{t('home.wardrobeCtaTitle')}</Text>
+              <Text style={styles.subCtaSub}>{t('home.wardrobeCtaSub')}</Text>
             </View>
             <Text style={styles.subCtaArrow}>›</Text>
           </TouchableOpacity>
@@ -96,12 +98,8 @@ export default function HomeScreen() {
 
         {/* 사용 팁 */}
         <View style={styles.tipBox}>
-          <Text style={styles.tipTitle}>💡 이렇게 사용해보세요</Text>
-          <Text style={styles.tipText}>
-            1. 오늘 입을 옷을 입고 전신 사진을 찍어요{'\n'}
-            2. AI가 날씨·활동에 맞는지 평가해줘요{'\n'}
-            3. 수정 제안과 AI 참고 이미지를 받아요
-          </Text>
+          <Text style={styles.tipTitle}>{t('home.tipTitle')}</Text>
+          <Text style={styles.tipText}>{t('home.tipText')}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
