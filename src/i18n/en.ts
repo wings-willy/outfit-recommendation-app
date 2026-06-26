@@ -72,7 +72,7 @@ const en = {
 
   // ── Home screen ─────────────────────────────────────
   home: {
-    greeting: 'Hello, {{name}} 👋',
+    greeting: 'Hello 👋',
     defaultActivity: 'Get AI feedback on your outfit today',
     todayActivity: "Today: {{activity}}",
     weatherTitle: '🌤 Today\'s Weather',

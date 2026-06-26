@@ -25,7 +25,6 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  const displayName = user?.name || user?.email?.split('@')[0] || t('home.greeting').replace(' {{name}} 👋', '');
   const activityText = user?.today_activity
     ? t('home.todayActivity', { activity: t(`activities.${user.today_activity}` as any) })
     : null;
@@ -40,7 +39,7 @@ export default function HomeScreen() {
         {/* 헤더 */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>{t('home.greeting', { name: displayName })}</Text>
+            <Text style={styles.greeting}>{t('home.greeting')}</Text>
             <Text style={styles.subGreeting}>
               {activityText ?? t('home.defaultActivity')}
             </Text>

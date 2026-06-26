@@ -72,7 +72,7 @@ const ko = {
 
   // ── 홈 화면 ────────────────────────────────────────
   home: {
-    greeting: '안녕하세요, {{name}}님 👋',
+    greeting: '안녕하세요 👋',
     defaultActivity: '오늘 코디, AI에게 평가받아보세요',
     todayActivity: '오늘: {{activity}}',
     weatherTitle: '🌤 오늘 날씨',
