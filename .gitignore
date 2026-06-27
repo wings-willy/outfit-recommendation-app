@@ -4,3 +4,19 @@
 
 expo-env.d.ts
 # @end expo-cli
+
+# 환경변수 (절대 커밋하지 않음)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+
+# 의존성
+node_modules/
+
+# EAS 빌드 로그
+eas_build*.log
+
+# Vercel
+.vercel
